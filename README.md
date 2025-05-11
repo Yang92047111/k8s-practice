@@ -173,5 +173,3 @@ kind delete cluster --name istio-demo
 * [Istio Sample Apps](https://github.com/istio/istio/tree/release-1.22/samples)
 
 ---
-
-Would you like a PDF version or diagram to go along with this tutorial?
