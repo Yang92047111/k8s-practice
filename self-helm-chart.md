@@ -1,7 +1,3 @@
-當然可以，以下是一份針對 **macOS 使用者** 撰寫的 **從零建立 Helm Chart 教學**（Markdown 格式），適合用來包裝一個簡單的應用（例如 Nginx），並部署到本地 Kubernetes（如 kind）叢集中。
-
----
-
 # 🛠️ 自建 Helm Chart 教學（for macOS）
 
 本教學將教你如何：
