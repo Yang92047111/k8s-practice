@@ -74,7 +74,7 @@ appVersion: "1.0"
 replicaCount: 1
 
 image:
-  repository: gin-demo
+  repository: localhost/gin-demo
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -133,6 +133,7 @@ spec:
 ## 🌐 `gin-istio.yaml`（Istio Gateway + VirtualService）
 
 ```yaml
+# Istio Gateway 設定支援多個 domain
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
@@ -146,27 +147,78 @@ spec:
         name: http
         protocol: HTTP
       hosts:
-        - "*"
+        - app.localhost
+        - grafana.localhost
+        - prometheus.localhost
 
 ---
+# Gin App VirtualService（http://app.localhost:8080）
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: gin-vs
 spec:
   hosts:
-    - "*"
+    - app.localhost
   gateways:
     - gin-gateway
   http:
     - match:
         - uri:
             prefix: /
+      rewrite:
+        uri: /
       route:
         - destination:
-            host: gin-demo
+            host: gin-demo-gin-demo-chart
             port:
               number: 8080
+
+---
+# Grafana VirtualService（http://grafana.localhost:8080）
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: grafana-vs
+spec:
+  hosts:
+    - grafana.localhost
+  gateways:
+    - gin-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: grafana.istio-system.svc.cluster.local
+            port:
+              number: 3000
+
+---
+# Prometheus VirtualService（http://prometheus.localhost:8080）
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: prometheus-vs
+spec:
+  hosts:
+    - prometheus.localhost
+  gateways:
+    - gin-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: prometheus.istio-system.svc.cluster.local
+            port:
+              number: 9090
 ```
 
 ---
@@ -183,19 +235,19 @@ CHART_PATH=./gin-demo-chart
 echo "🧹 Cleaning up old cluster (if any)..."
 kind delete cluster --name istio-demo || true
 
-echo "📦 Creating kind cluster..."
-kind create cluster --name istio-demo
+echo "📦 Creating kind cluster with port mappings..."
+kind create cluster --name istio-demo --config kind-config.yaml
 
 echo "🚀 Installing Istio..."
 istioctl install --set profile=demo -y
 kubectl label namespace default istio-injection=enabled
 
 echo "📦 Building Go Gin Docker image..."
-docker build -t gin-demo:latest .
-kind load docker-image gin-demo:latest --name istio-demo
+docker build -t localhost/gin-demo:latest .
+kind load docker-image localhost/gin-demo:latest --name istio-demo
 
 echo "🚀 Deploying with Helm..."
-helm install $APP_NAME $CHART_PATH
+helm install $APP_NAME $CHART_PATH || helm upgrade $APP_NAME $CHART_PATH
 
 echo "🌐 Applying Istio Gateway & VirtualService..."
 kubectl apply -f gin-istio.yaml
@@ -204,8 +256,9 @@ echo "📈 Installing Prometheus and Grafana..."
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/addons/prometheus.yaml
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/addons/grafana.yaml
 
-echo "✅ Deployment complete!"
-echo "Visit your app at: http://localhost:$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.spec.ports[0].nodePort}')"
+echo "🔁 Forwarding istio-ingressgateway to localhost:8080 ..."
+kubectl port-forward svc/istio-ingressgateway -n istio-system 8080:80 > /dev/null 2>&1 &
+
 ```
 
 ---
@@ -220,13 +273,13 @@ chmod +x deploy.sh  # 賦予腳本執行權限
 
 ### 預期結果
 
-* 瀏覽 `http://localhost:<PORT>` 應回傳：
+* 瀏覽 `http://app.localhost:8080` 應回傳：
 
 ```json
 {"message":"Hello from Gin + Istio 🚀"}
 ```
 
-* 瀏覽 Grafana：`http://localhost:3001`
-* 瀏覽 Prometheus：`http://localhost:3002`
+* 瀏覽 Grafana：`http://grafana.localhost:8080`
+* 瀏覽 Prometheus：`http://prometheus.localhost:8080`
 
 ---
